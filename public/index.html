@@ -8,46 +8,45 @@
     #map { height: 400px; width: 100%; margin-top: 8px; }
     #list div { margin: 4px 0; }
   </style>
-  <!--
-    **重點 1**：這支腳本加了 defer，等整個 DOM 都準備好才跑，
-    就不會再出現 `Cannot set properties of null` 的錯誤
-  -->
+
+  <!-- 加上 defer，等 DOM 準備好再跑 -->
   <script type="module" defer>
     document.addEventListener('DOMContentLoaded', async () => {
-      // 先抓到畫面上的元素
-      const btn  = document.getElementById('btn');
-      const list = document.getElementById('list');
-      const mapDiv = document.getElementById('map');
+      const btn   = document.getElementById('btn');
+      const list  = document.getElementById('list');
+      const mapEl = document.getElementById('map');
 
-      /* ---------- 1. 從自己的 /api/config 取得金鑰 ---------- */
+      /* ---------- 1. 取環境變數 ---------- */
       let CONFIG;
       try {
         CONFIG = await fetch('/api/config').then(r => r.json());
-      } catch (err) {
-        list.textContent = '讀取 config 失敗：' + err.message;
+      } catch (e) {
+        list.textContent = '讀取 /api/config 失敗：' + e.message;
         return;
       }
 
-      /* ---------- 2. 動態載入 Google Maps SDK ---------- */
+      /* ---------- 2. 載入 Google Maps SDK ---------- */
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = `https://maps.googleapis.com/maps/api/js?key=${CONFIG.PUBLIC_GMAPS_API_KEY}&callback=initMap`;
         s.async = true;
-        window.initMap = resolve;   // SDK 下載完成後會呼叫 initMap
+        window.initMap = resolve;
         s.onerror = reject;
         document.head.appendChild(s);
       });
 
-      /* ---------- 3. 先把地圖畫出來 ---------- */
-      const map = new google.maps.Map(mapDiv, {
+      /* ---------- 3. 建立地圖 ---------- */
+      const map = new google.maps.Map(mapEl, {
         center: { lat: 25.026, lng: 121.522 },
         zoom: 14
       });
 
-      /* ---------- 4. 點「送出查詢」時呼叫自己的 /api/bright-task ---------- */
+      /* ---------- 4. 點擊查詢 ---------- */
+      const markers = [];                    // ← 用陣列記住 marker
       btn.onclick = async () => {
         btn.disabled = true;
         list.textContent = '查詢中…';
+
         try {
           const r = await fetch('/api/bright-task', {
             method: 'POST',
@@ -61,25 +60,26 @@
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const places = await r.json();
 
-          // 清空舊結果
+          /* --- 清掉舊的結果 --- */
           list.innerHTML = '';
-          mapDiv.querySelectorAll('img[role="presentation"]').forEach(m => m.remove());
+          markers.forEach(mk => mk.setMap(null));
+          markers.length = 0;
 
-          // 把新結果放到清單 & 地圖
+          /* --- 新結果畫到畫面 --- */
           places.forEach(p => {
             const row = document.createElement('div');
             row.textContent = `${p.name} — ${p.address}`;
             list.appendChild(row);
 
-            new google.maps.Marker({
+            const mk = new google.maps.Marker({
               position: { lat: p.lat, lng: p.lng },
               map,
               title: p.name
             });
+            markers.push(mk);
           });
-
-        } catch (err) {
-          list.textContent = '查詢失敗：' + err.message;
+        } catch (e) {
+          list.textContent = '查詢失敗：' + e.message;
         } finally {
           btn.disabled = false;
         }
@@ -87,6 +87,7 @@
     });
   </script>
 </head>
+
 <body>
   <h1>今天古亭附近有哪些店？</h1>
   <button id="btn">送出查詢</button>
