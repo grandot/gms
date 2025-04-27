@@ -1,70 +1,52 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8" />
-  <title>附近餐廳查詢</title>
-  <style>
-    /* 你的样式… */
-    #map { height: 400px; width: 100%; }
-  </style>
-</head>
-<body>
-  <h1>今天古亭附近有哪些店？</h1>
-  <button id="btn">送出查詢</button>
-  <div id="list"></div>
-  <div id="map"></div>
+<script>
+let MAP, CONFIG;
 
-  <script>
-    let MAP, CONFIG;
+// 1. 先抓 /api/config 取 key
+fetch('/api/config')
+  .then(res => res.json())
+  .then(c => {
+    CONFIG = c;
 
-    // 1. 先拿到 server 端的 keys
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(c => {
-        CONFIG = c;
-        // 2. 动态载入 Google Maps 脚本
-        const s = document.createElement('script');
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${c.PUBLIC_GMAPS_API_KEY}&callback=initMap`;
-        s.async = true;
-        document.head.appendChild(s);
-      })
-      .catch(console.error);
+    // 2. 動態載入 Maps
+    const s   = document.createElement('script');
+    s.src     = `https://maps.googleapis.com/maps/api/js?key=${c.PUBLIC_GMAPS_API_KEY}&callback=initMap`;
+    s.async   = true;
+    document.head.appendChild(s);
+  })
+  .catch(console.error);
 
-    // 3. Google Maps callback
-    function initMap() {
-      MAP = new google.maps.Map(document.getElementById('map'), {
-        center: { lat: 25.026, lng: 121.522 },
-        zoom: 14
-      });
-    }
+// 3. 地圖 callback
+function initMap () {
+  MAP = new google.maps.Map(document.getElementById('map'), {
+    center : { lat: 25.026, lng: 121.522 },
+    zoom   : 14
+  });
+}
 
-    // 4. 点击按钮后调用你的 Edge Function 显示结果
-    document.getElementById('btn').addEventListener('click', () => {
-      const { lat, lng } = MAP.getCenter().toJSON();
-      fetch('/api/bright-task', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({
-          question: '今天古亭附近有哪些店',
-          lat, lng
-        })
-      })
-      .then(res => res.json())
-      .then(arr => {
-        document.getElementById('list').innerHTML =
-          arr.map(r => `<p>${r.name} — ${r.address}</p>`).join('');
-        // 可选：在地图上打点
-        arr.forEach(r => new google.maps.Marker({
-          position: { lat: r.lat, lng: r.lng },
-          map: MAP,
-          title: r.name
-        }));
-      })
-      .catch(console.error);
-    });
-  </script>
-</body>
-</html>
+// 4. 查詢按鈕
+document.getElementById('btn').onclick = () => {
+  fetch('/api/bright-task', {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify({
+      question: '今天古亭附近有哪些店2',
+      lat : 25.026,
+      lng : 121.522
+    })
+  })
+  .then(r => r.json())
+  .then(showResults)
+  .catch(console.error);
+};
+
+function showResults(arr) {
+  const list = document.getElementById('list');
+  list.innerHTML = arr.map(x => `<p>${x.name} — ${x.address}</p>`).join('');
+
+  arr.forEach(x => new google.maps.Marker({
+    map: MAP,
+    position: { lat: x.lat, lng: x.lng },
+    title: x.name
+  }));
+}
+</script>
